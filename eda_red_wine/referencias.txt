@@ -1,0 +1,14 @@
+Projeto exemplo
+https://s3.amazonaws.com/content.udacity-data.com/courses/ud651/diamondsExample_2016-05.html
+
+Sites consultados
+https://ggplot2.tidyverse.org/
+https://plot.ly/ggplot2/geom_point/
+https://en.wikipedia.org/wiki/Acids_in_wine
+http://www.sthda.com/english/wiki/qplot-quick-plot-with-ggplot2-r-software-and-data-visualization
+http://www.sthda.com/english/wiki/ggcorrplot-visualization-of-a-correlation-matrix-using-ggplot2
+https://docs.pipz.com/central-de-ajuda/learning-center/guia-basico-de-markdown
+
+Projetos do github
+https://github.com/sagarnildass/
+https://github.com/Qizhaolouis/
