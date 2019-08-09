@@ -1,0 +1,421 @@
+---
+title: "Análise de dados exploratória de dados de Vinho Tinto (red wine)"
+author: "Ellen Souza"
+date: "`r Sys.Date()`"
+output:
+  prettydoc::html_pretty:
+    theme: cayman
+    highlight: github
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, message=FALSE, warning=FALSE)
+```
+```{r echo=FALSE, message=FALSE, warning=FALSE, packages}
+# Carregue aqui todos os pacotes utilizados 
+# na sua análise realizada neste arquivo fonte.
+
+
+library(dplyr)
+library(ggplot2)
+library(ggthemes)
+library(gridExtra)
+library(GGally)
+library(corrplot)
+library(ggcorrplot)
+library(kableExtra)
+library(memisc)
+
+```
+
+
+
+```{r echo=FALSE, Load_the_Data}
+# Carregamento dos dados
+red_wine <- read.csv('wineQualityReds.csv', sep = ',')
+
+# Criação de variável categórica para facilitar gráficos e visualizações
+red_wine$quality_categ <- factor(red_wine$quality, ordered = T)
+
+```
+
+## 1. Descrição dos dados de vinho tinto
+
+  Temos como objeto desse trabalho uma base contendo análises de vinho tinho por meio de `r ncol(red_wine)` variáveis e `r nrow(red_wine)` registros. Foram estabelecidas notas de 0 a 10 para cada vinho, sendo 0 a classificação mais baixa (vinho muito ruim) e 10 a classificação mais alta (vinho muito bom). Usaremos o conteúdo das variáveis (características do vinho) para tentar determinar a qualidade do mesmo. Inicialmente passaremos a descrever as variáveis existentes:
+    
+```{r}
+str(red_wine)
+
+```
+  
+  Sumários estatístico do conjunto de dados:
+  
+```{r}
+summary(red_wine)
+```
+
+## 2. Seção de Gráficos Univariados
+
+Nesta seção plotaremos histogramas de algumas variáveis para avaliar a distribuição, quantidade de outliers, pontos de intesse e verificar se faremos transformações em alguma delas. 
+
+A primeira ideia foi de que o **açúcar residual** *(residual.sugar)* poderia ter grande influência sobre a qualidade do vinho. Observando melhor as demais variáveis, temos que juntamente com o **álcool** *(alcohol)*, o açúcar contribui para a densidade do vinho. 
+
+Vamos plotar histogramas dessas variáveis: 
+    
+```{r results='hide'}
+p1 <- qplot(log10(x = residual.sugar), data = red_wine, ylab = 'count', color = I('blue'), fill = I('light blue'), binwidth = 0.05)  
+
+p2 <- qplot(x = alcohol, data = red_wine, ylab ="count", color = I('blue'), fill = I('light blue') , binwidth = 0.5) +  scale_x_continuous(limits = c(8,14))
+
+p3 <- qplot(x = density, data = red_wine, ylab ="count", color = I('blue'), fill = I('light blue') , binwidth = 0.001)
+
+grid.arrange(p1, p2, p3, ncol = 3) + theme_minimal(30)
+```
+
+Dos histogramas observamos que o **açúcar residual** *(residual.sugar)* apresenta assimetria positiva, mesmo com aplicação de log10. O **álcool** também apresenta assimetria positiva mas tendendo mais a uma distribuição normal, sua escala foi ajustada para melhor visualização e retirada de alguns outliers. A **densidade** *(alcohol)* apresenta distribuição que podemos chamar de normal. 
+
+Passando para outros atributos, temos que os ácidos do vinho também devem ser equilibrados, nesse sentido vamos analisar as variáveis relacionadas à acidez: 
+
+```{r results='hide'}
+p1 <- qplot(x = fixed.acidity, data = red_wine, binwidth = 1, ylabel = 'count', color = I('blue'), fill = I('light blue')) +             scale_x_continuous(limits = c(4,14))
+
+p2 <- qplot(x = volatile.acidity, data = red_wine, binwidth = 0.02, ylab = 'count', color = I('blue'), fill = I('light blue')) +         scale_x_continuous(limits = c(0,1))
+
+p3 <- qplot(x = citric.acid, data = red_wine, ylab ="count", color = I('blue'), fill = I('light blue'), binwidth = 0.05)
+
+p4 <- qplot(x = pH, data = red_wine, ylab ="count", color = I('blue'), fill = I('light blue') , binwidth = 0.1)
+ 
+grid.arrange(p1, p2, p3, p4, ncol = 2, nrow = 2) + theme_minimal(30)
+ 
+```
+
+As distribuições das variáveis **acidez fixa** *(fixed acidity)* e da **acidex volátil** *(volatile.acidity)* se aproximam da normal, mesmo com alguns picos na acidez volátil, as escalas de ambas foram ajustadas, o que deixa de exibir alguns outliers. O pH apresenta distribuição normal. A variável **acidez cítrica** *(citric.acid)* apresenta distribuição irregular, com grande quantidade de valores iguais a 0. Do conhecimento que temos, não é possível dizer se o valor 0 foi encontrado no vinho ou se é um padrão.
+
+O **dióxido de enxofre** *(sulfur.dioxide)* é usado como conservante nos vinhos, mas em quantidade desequilibrada pode prejudicar o sabor e a qualidade do vinho. Os sulfatos (sulphates) também alteram o teor do enxofre no vinho. Então vamos observar o histograma das variáveis relacionadas: 
+    
+```{r results='hide'}
+
+p1 <- qplot(x = log10(total.sulfur.dioxide), data = red_wine, ylab ="count", color = I('blue'), fill = I('light blue'), 
+                binwidth = 0.1)
+
+p2 <- qplot(x = free.sulfur.dioxide, data = red_wine, ylab ='count', color = I('blue'), fill = I('light blue'))
+
+p3 <- qplot(x = log10(sulphates), data = red_wine, ylab ='count', color = I('blue'), fill = I('light blue'))
+
+
+grid.arrange(p1, p2, p3, ncol = 3) + theme_minimal(30)
+```
+
+De se observar que para **enxofre total** *(total.sulfur.dioxide)* e **sulfatos** *(sulphates)* a distribuição se aproxima da normal após aplicação de log10. O **enxofre livre** *(free.sulfur.dioxide)* apresenta mais uma assimetria positiva com alguns picos. 
+  
+  Finalmente, o atributo **qualidade** *(quality)* é o principal atributo de interesse do conjunto. É o que queremos determinar a partir das outras propriedades. Vamos criar categorias a partir da variável **qualidade** na variável **quality_categ** que é um fator ordenado.  
+    
+```{r results='hide'}
+
+p1 <- qplot(x = quality, data = red_wine, ylab ="count", color = I('blue'), fill = I('light blue'))
+
+p2 <- qplot(x = quality_categ, data = red_wine, ylab ="count", color = I('blue'), fill = I('light blue'))
+ 
+grid.arrange(p1, p2, ncol = 2) + theme_minimal(30)
+ 
+```
+
+A maior parte dos vinhos receberam notas 5 e 6. Não existem vinhos com notas abaixo de 3 ou acima de 8.   
+
+## 3. Análise Univariada
+
+### 3.1 Qual é a estrutura do conjunto de dados?
+ 
+O conjunto de dados consiste em uma estrutura contendo 13 variáveis e 1599 registros. É um conjunto bastante pequeno,  sendo possíveis análises na completude dos dados. Para fins de categorização, optou-se por criar um fator ordenado para a variável qualidade o atributo *quality_categ* totalizando 14 variáveis.   
+A grande maioria dos vinhos apresentam as notas entre 5 e 6, chegando a mais de 80% do conjunto de dados. Cerca de 4% dos vinhos receberam as notas 2 e 3 e apenas 16% acima 6 até 8. Acredita-se que as observações sobre os atributos e incidência na qualidade serão melhores sobre os vinhos medianos (5,6) pela massa de dados analisada. 
+ 
+### 3.2 Quais são os principais atributos de interesse deste conjunto de dados?
+  
+Quer-se analisar quais atributos interferem na qualidade do vinho tinto. O principal atributo alvo é a **qualidade** *(quality)*.
+ 
+### 3.3 Quais outros atributos você acha que podem lhe auxiliar na investigação destes atributos de interesse?
+ 
+Inicialmente podemos considerar as variáveis **açúcar residual** *(residual.sugar)* e o **álcool** *(alcohol)* como potenciais formadores de qualidade do vinho. Um vinho muito doce ou com muito álcool pode ficar desequilibrado e ter um sabor desagradável. Os atributos relacionados à acidez *(fixed acidity, volatile acidity, pH)* também parecem se relacionar mais diretamente com a qualidade. Por fim, as propriedades que incidem no enxofre *(free.sulfur.dioxide, total.sulfur.dioxide e sulphates)* podem alterar o gosto e o cheiro do vinho, e a qualidade, consequentemente.  
+  
+### 3.4 Você criou novas variáveis a partir dos atributos existentes no conjunto de dados?
+    
+Sim. Foi criada a variável quality_categ - que corresponde a um fator ordenado da qualidade com 7 níveis.  
+
+### 3.5 Dos atributos investigados, distribuições incomuns foram encontradas? Você aplicou operações nos dados para limpá-los, ajustá-los ou mudar a forma dos dados? Se sim, por quê?
+  
+Sim. Alguns atributos apresentam distribuição praticamente normal *(pH, density, fixed.acidity, volatile.acidity)*. Foram aplicadas algumas transformações de log10 para retirar algumas caudas e observar se a distribuição podia ser normal *(sulphates, total.sulfur.dioxide, residual.sugar)*. A variável *citric.acid* apresentou distribuição não identificada. 
+
+
+# 4. Seção de Gráficos Bivariados
+  
+Iniciaremos criando uma tabela de correlação das variáveis para observar os relacionamentos que se destacam.
+  
+```{r, echo=FALSE, Bivariate_Plots}
+ # Tabela de correlação do conjunto de dados sem as variáveis categóricas  
+ tb_corr <- cor(
+    red_wine %>%
+    dplyr::select(-X)  %>%
+    dplyr::select(-quality_categ)
+)
+print(format(round(tb_corr, 3), nsmall = 3))
+
+```
+  
+Matriz de correlação com arredondamento para uma casa decimal: 
+    
+```{r echo=FALSE}
+corr <- round(tb_corr, 1)
+ggcorrplot(corr, hc.order = TRUE, type = "lower",
+   lab = TRUE, ggtheme = ggplot2::theme_gray,
+   colors = c("#E46726", "white", "#6D9EC1"))
+```
+    
+Pelo gráfico notamos as maiores correlações positivas em gradações de azul e as maiores correlações negativas em gradações de vermelho. Destaque para as correlações entre **qualidade** *(quality)* e **álcool** *(alcohol)*, e **acidez volátil** *(volatile.acidity)* e quality (qualidade), apesar de não muito fortes. Dentre as mais fortes figuram: acidez fixa(fixed.acidity) e acidez cítrica (citric.acid); enxofre total (total.sulfur.dioxide) e enxofre livre(free.sulfur.dioxide).    
+
+
+## 4.1 Análise gráfica de alguns relacionamentos que se destacaram nas correlações
+
+```{r}
+ ggplot(aes(x = quality_categ, y = log10(residual.sugar)), data = red_wine) + 
+   geom_jitter( alpha = .3, color = 'dark blue') +
+   geom_boxplot(alpha = .5,color = 'blue', fill = 'light blue')
+```
+  
+Não parece haver uma relação significativa entre o **açúcar residual** *(residual.sugar)* e a **qualidade** *(quality)*. Na transformação com log10 não houve diferença nesse comportamento. A média do açúcar permanece quase que constante à medida que a qualidade aumenta.
+  
+```{r}
+ggplot(aes(x = quality_categ, y = alcohol), data = red_wine) + 
+  geom_jitter( alpha = .3, color = 'dark blue') +
+  geom_boxplot(alpha = .5,color = 'blue', fill = 'light blue')
+
+```
+```{r}
+by(red_wine$alcohol, red_wine$quality, summary)
+```
+  
+A correlação do **álcool** *(alcohol)* com a qualidade se mostrou bem interessante, com as médias de álcool aumentando à medida que a qualidade também aumenta. Vamos observar a relação do álcool com a densidade graficamente:
+  
+```{r}
+ggplot(aes(x = density, y = alcohol), data = red_wine) + 
+  geom_point(alpha = .5,color = 'light blue') + geom_smooth(method=lm, color = 'dark blue', se=FALSE)
+```
+    
+A correlação negativa entre **álcool** (alcohol) e **densidade** (density) é exibida no gráfico. Esse fato, no entanto, é esperado já que a densidade do álcool é menor que a da água. Outros atributos também podem interferir na densidade. 
+
+Outra correlação de destaque se deu entre a **qualidade** (quality) e **acidez volátil** (volatile.acidity): 
+    
+```{r}
+ ggplot(aes(x = quality_categ, y = volatile.acidity), data = red_wine) + 
+   geom_jitter( alpha = .3, color = 'dark blue') +
+   geom_boxplot(alpha = .5,color = 'blue', fill = 'light blue')
+```
+      
+A correlação **negativa** entre **acidez volátil** (volatile.acidity) e **qualidade** (quality) também é explicitada no gráfico, a qualidade aumenta quando a acidez volátil diminui. Mas a acidez volátil mostrou uma correlação forte com **acidez cítrica** (citric.acid), vamos plotar os gráficos mais relevantes para acidez cítrica, para ver se conseguimos encontrar alguma outra propriedade com incidência na qualidade: 
+      
+```{r}
+ p1 <- ggplot(aes(x = citric.acid, y = fixed.acidity), data = red_wine) + 
+         geom_point(alpha = .5,color = 'light blue') + geom_smooth(method=lm, color = 'dark blue', se=FALSE)
+
+ p2 <- ggplot(aes(x = citric.acid, y = volatile.acidity), data = red_wine) + 
+         geom_point(alpha = .5,color = 'light blue') + geom_smooth(method=lm, color = 'dark blue', se=FALSE)
+ 
+ p3 <- ggplot(aes(x = citric.acid, y = pH), data = red_wine) + 
+         geom_point(alpha = .5,color = 'light blue') + geom_smooth(method=lm, color = 'dark blue', se=FALSE)
+ 
+ grid.arrange(p1, p2,p3, ncol = 3) + theme_minimal(30)
+```
+    
+Conforme explicitado pelos gráficos quando a acidez cítrica aumenta, a acidez fixa também aumenta. Ao contrário, quando ela dimnui, a acidez volátil e o ph também diminuem. 
+
+Considerando agora, as relações entre acidez volátil e qualidade e acidez cítrica, será que um aumento desta última provoca um aumento da qualidade? Graficamente temos:
+    
+```{r}
+ ggplot(aes(x = quality_categ, y = citric.acid), data = red_wine) + 
+   geom_jitter( alpha = .3, color = 'dark blue') +
+   geom_boxplot(alpha = .5,color = 'blue', fill = 'light blue')
+```
+    
+Interessante perceber que o gráfico de **acidez cítrica x qualidade** ficou semelhante ao de álcool x qualidade.  Demonstrando que a qualidade parece aumentar`à medida que a acidez cítrica aumenta. No entanto, há um grande número de outliers, principalmente para os vinhos de qualidade 5 e 6 (médios), esse fenômeno também acontece para o álcool. Aqui vamos traçar os modelos de regressão linear de ambas as variáveis com a qualidade e observar as estatisticas: 
+
+```{r}
+ simple.fit = lm(quality~alcohol, data=red_wine)
+ summary(simple.fit)
+
+```    
+  
+Pelo valor de R^2, o álcool determinaria cerca de 22% da qualidade do vinho. E a acidez cítrica: 
+
+```{r}
+ simple.fit = lm(quality~citric.acid, data=red_wine)
+ summary(simple.fit)
+
+```  
+    
+Com valor de R^2 muito baixo, pelo modelo de regressão linear não é possível estabelecer a relação entre acidez cítrica e qualidade. 
+
+Por fim, vamos verificar o gráfico de acidez fixa (fixed.acidity) versus a qualidade (quality), devido a sua relação com a acidez cítrica:
+    
+```{r}
+ggplot(aes(x = quality_categ, y = fixed.acidity), data = red_wine) + 
+  geom_jitter( alpha = .3, color = 'dark blue') +
+  geom_boxplot(alpha = .5,color = ' blue', fill = 'light blue')
+```
+```{r}
+by(red_wine$fixed.acidity, red_wine$quality, summary)
+```  
+    
+Da observação do gráfico e do resumo temos que a **acidez fixa** (fixed.acidity) não está interferindo na qualidade. 
+    
+# 5. Análise Bivariada
+
+## 5.1 Discuta sobre alguns dos relacionamentos observados nesta parte da investigação. Como os atributos de interesse variaram no conjunto de dados?
+    
+Na análise bivariada foi possível avaliar os relacionamentos entre as propriedades dos vinhos. Inicialmente foi observada a matriz de correlaçao dos dados e alguns relacionamentos de destaque foram investigados. Em se tratanto da qualidade do vinho **(quality)**, atributo de interesse, suas principais relações se deram com o **álcool** (alcohol), **acidez volátil** (volatile.acidity) e um pouco também com a **acidez cítrica** (citric.acid). O álcool apresentou a maior correlação (0.48) positiva, sendo que quanto mais alto o teor de álcool, melhor a qualidade do vinho. A acidez volátil apresentou a maior correlação negativa (-0.39), quanto menor a acidez volátil, melhor a qualidade do vinho. No caso da acidez cítrica (citric.acid), apesar do valor de correlação ser baixo, suas médias variaram para cima com o aumento da qualidade, demonstrando uma correlação positiva. 
+Interessante perceber que na análise bivariada não foi possível estabelecer correlação entre o açúcar residual (residual.sugar) ou a acidez fixa (fixed.acidity) e a qualidade (quality), hipóteses que estávamos considerando na análise univariada. 
+
+## 5.2 Você observou algum relacionamento interessante entre os outros atributos (os que não são de interesse)?
+    
+Sim. Alguns relacionamentos foram investigados, como o entre álcool (alcohol) e densidade, que demonstrou que, para o conjunto, à medida que o álcool aumenta a densidade diminui (isso é esperado já que a densidade do álcool é menor que a da água); também as correlações entre acidez volátil (volatile.acidity), acidez fixa (fixed.acid) e ph, com a acidez cítrica (citric.acid) mostraram valores relevantes. Sendo que a correlação é positiva apenas com a acidez fixa(fixed.acid). Nos outros casos, a acidez cítrica diminui quando a acidez volátil ou o ph aumentam.  
+
+## 5.3 Qual foi o relacionamento mais forte encontrado? 
+
+O relacionamento mais forte foi entre acidez fixa (fixed.acidity) e pH, que apresentou uma correlação de -0.68. Não foi identificada nenhuma particularidade nele, pelo fato de ser sabido que o pH é mais baixo para substâncias ácidas.Outros relacionamentos fortes: fixed.acid x citric.acid (0.67), fixed.acid x density (0.66) e free.sulfur.dioxide x total.sulfur.dioxide (0.66).   
+
+# 6. Seção de Gráficos Multivariados
+  
+  Nesta seção iremos nos aprofundar nos relacionamentos entre as propriedades do vinho adicionando outras variáveis aos mesmos. 
+  
+  No primeiro caso, vamos analisar a principal relação percebida que foi entre a **qualidade** (*quality*) e o **álcool**, acrescentando outras variáveis, primeiro a **densidade**: 
+  
+```{r echo=FALSE, Multivariate_Plots}
+  ggplot(aes(x = density, y = alcohol, color = quality_categ), data = red_wine) + 
+    geom_point() +
+    geom_smooth(method = "lm", se = FALSE,size=1)  +
+    scale_color_brewer(type = 'div', palette = 'RdYlBu', 
+                       guide = guide_legend(title='Quality'))
+```
+
+Pelo gráfico exibido, as linhas estão baixando quando a densidade aumenta, os pontos de qualidade mais alta estão mais concentrados em regiões de densidade mais baixa. A relação entre álcool e qualidade é mais facilmente percebida, as pontos em tons de azul representam as qualidades superiores e estão em regiões de maior quantidade de álcool no gráfico. 
+
+```{r echo=FALSE}
+  ggplot(aes(x = density, y = residual.sugar, color = quality_categ), data = red_wine) + 
+    geom_point() +
+    geom_smooth(method = "lm", se = FALSE,size=1)  +
+    scale_color_brewer(type = 'div', palette = 'RdYlBu', 
+                       guide = guide_legend(title='Quality'))
+```
+
+O açúcar residual mais uma vez não apresenta uma influência na qualidade do vinho tinto. Seus valores também parecem não variar linearmente com a densidade. 
+
+```{r echo=FALSE}
+  ggplot(aes(x = citric.acid, y = volatile.acidity, color = quality_categ), data = red_wine) + 
+    geom_point() +
+    geom_point()  +
+    scale_color_brewer(type = 'div', palette = 'RdYlBu', 
+                       guide = guide_legend(title='Quality'))
+```
+
+Apesar de não apresentar um relacionamento tão forte, mais uma vez a acidez cítrica merece ser explorada. A quantidade de pontos de vinhos de qualidade superior parece ser maior para um valor maior de acidez cítrica e para uma valor menor de acidez volátil. A propriedade acidez cítrica merece mais investigação.
+
+Após essas investigações temos algumas variáveis que parecem ser as mais influentes na qualidade do vinho, quais sejam: álcool, acidez volátil e acidez cítrica. Vamos criar um modelo com essas três variáveis para observar se através delas conseguimos determinar a qualidade do vinho com alto valor de R^2. 
+```{r}
+
+set.seed(2000)
+# Separando os dados de treinamento no conjunto
+training_data <- sample_frac(red_wine, .6)
+# Dados de teste
+test_data <- red_wine[ !red_wine$X %in% training_data$X, ]
+
+m1 <- lm(quality ~ alcohol, data = training_data)
+m2 <- update(m1, ~ . + volatile.acidity)
+m3 <- update(m2, ~ . + citric.acid)
+
+mtable(m1,m2,m3)
+```
+
+O modelo não demonstrou relevância para a variável acidez cítrica (citric.acid). As variáveis álcool e acidez volátil em conjunto conseguem determinar cerca de 32% da qualidade, valor ainda bem baixo.
+
+# 7. Análise Multivariada
+
+## 7.1 Discuta sobre os relacionamentos observados nesta parte da investigação. Quais atributos que fortaleceram os demais na observação das variáveis de interesse?
+
+Em geral, os relacionamentos multivariados investigados fortaleceram as descobertas adquiridas na análise bivariada. A qualidade aumentando na proporção que o álcool aumenta e possivelmente a densidade diminuindo à medida que o álcool aumenta. O açúcar residual, que era uma das hipóteses iniciais, mais uma vez não demonstrou um relacionamento marcante com a qualidade e a densidade. Por fim, merece destaque a acidez cítrica que não apresenta correlação importante, mas se destacou no gráfico de qualidade e acidez volátil, parecendo que vinhos melhores tem uma acidez cítrica maior. 
+
+## 7.2 Interações surpreendentes e/ou interessantes foram encontradas entre os atributos?
+
+Grande parte dos relacionamentos que poderiam surpreender foram desacreditados na análise bivariada. O atributo acidez fixa, por exemplo, não exibiu relacionamento com a qualidade. Interessante mencionar que a acidez cítrica apresenta importante correlação com acidez fixa, acidez volátil e ph e nos gráficos exibe uma relação com a qualidade. 
+
+## 7.3 OPCIONAL: Modelos foram criados usando este conjunto de dados? Discuta sobre os pontos fortes e as limitações do seu modelo.
+
+Exemplificativamente foi criado um modelo com as variáveis mais relevantes da investigação. Os atributos levantados (alcohol, volatile.acidity, citric.acid) só foram responsáveis por cerca de 32% da variação da qualidade. Mesmo assim citric.acid não provocou aumento nesse percentual. O modelo de regressão linear é limitado para esses dados, a distribuição de algumas variáveis não é normal, dificultanto a regressão. Os dados também não são bem distribuídos na qualidade, se concentrando em valores médios e tendo poucos registros em valores mais altos ou mais baixos, isso limita a aplicação do modelo.
+
+
+# 8. Gráficos Finais e Sumário
+
+## 8.1 Primeiro Gráfico
+
+```{r echo=FALSE, Plot_One}
+ggcorrplot(corr, hc.order = TRUE, type = "lower",
+   lab = TRUE, ggtheme = ggplot2::theme_gray,
+   colors = c("#E46726", "white", "#6D9EC1")) +
+   ggtitle('Tabela de correlação entre os atributos')
+```
+
+#### 8.1.1 Descrição do Primeiro Gráfico
+
+O gráfico mostra a tabela de correlação entre os atributos do conjunto de dados. As maiores correlações positivas são mostradas em gradações de azul e as maiores correlações negativas em gradação de vermelho. Por meio dessa tabela podemos selecionar alguns relacionamentos entre as variáveis principais para mais investigações. Pela cor e valor da correlação é fácil identificar algumas relações fortes como entre citric.acid x fixed.acidity, que sendo positiva, indica que quando citric.acid cresce fixed.acid também cresce; ou como pH e fixed.acidity, que é negativa, indicando que quando uma cresce a outra diminui. Também podemos avaliar os relacionamentos entre os atributos e a qualidade, principal atributo de interesse. 
+
+Daqui pudemos extrair correlações importantes com a qualidade: alcohol x quality(0.5 positiva) e volatile.acidity x quality (0.4 negativa). 
+
+
+## 8.2 Segundo Gráfico
+
+```{r echo=FALSE, Plot_Two}
+
+p1 <- ggplot(aes(x = quality_categ, y = alcohol), data = red_wine) + 
+        geom_jitter( alpha = .3, color = 'dark blue') +
+        geom_boxplot(alpha = .5, color = 'blue', fill = 'light blue') +
+        ylab ('alcohol (%)') +
+        xlab ('quality')
+
+p2 <- ggplot(aes(x = quality_categ, y = volatile.acidity), data = red_wine) + 
+        geom_jitter( alpha = .3, color = 'dark blue') +
+        geom_boxplot(alpha = .5, color = 'blue', fill = 'light blue') +
+        ylab ('volatile.acidity (g/l)') +
+        xlab ('quality')
+
+grid.arrange(p1, p2, ncol = 2, top = 'Influência do álcool e da acidez volátil sobre a qualidade')
+```
+
+#### 8.2.1 Descrição do Segundo Gráfico
+
+Os gráficos mostram a influência, primeiro do álcool, depois da acidez volátil sobre a qualidade. No primeiro, observamos facilmente a mediana e a média do álcool aumentando à medida que a qualidade também aumenta, sobretudo a partir dos vinhos de qualidade 5. No segundo gráfico, ao contrário, percebemos a média e mediana e acidez volátil diminuir quando a qualidade aumenta. Isso vem demonstrar que quanto maior a quantidade de álcool no vinho, melhor sua qualidade e, inversamente, quanto menor a acidez volátil, maior a qualidade do vinho. 
+
+## 8.3 Terceiro Gráfico
+
+```{r echo=FALSE, Plot_Three}
+  ggplot(aes(x = citric.acid, y = volatile.acidity, color = quality_categ), data = red_wine) +
+    ggtitle('Acidez volátil x acidez cítrica x qualidade') +
+    geom_point() +
+    geom_point() +
+    scale_color_brewer(type = 'div', palette = 'RdYlBu', 
+                       guide = guide_legend(title='quality'))
+
+```
+
+#### 8.3.1 Descrição do Terceiro Gráfico
+
+No gráfico 3 investigamos as relações entre Acidez volátil x acidez cítrica x qualidade. Procura-se tentar estabelecer a influência da acidez cítrica em conjunto com a acidez volátil sobre a qualidade. O gráfico deixa transparecer uma relação, ainda que não tão forte, de que os vinhos melhores possuem maior acidez cítrica. Note-se a maior quantidade de pontos de qualidade mais alta 0.30 de acidez cítrica. Ao mesmo tempo acidez volátil diminui com o aumento da qualidade e da acidez cítrica. 
+
+
+# 9. Reflexão
+
+O conjunto de dados de vinhos tintos tem 13 atributos e 1599 registros. Esses atributos correspondem a características dos vinhos e um deles é uma nota atribuída por um especialista. O trabalho foi iniciado buscando uma compreensão das variáveis, já que não é um conjunto de dados comum, e tentando agrupar variáveis com afinidades ou relacionadas ao mesmo tema (exemplo: densidade, ácidos, enxofre) a fim de facilitar análises futuras. Após esse agrupamento foram plotados histogramas dos principais atributos para observar comportamentos como distribuição dos dados, necessidade de tranformação e outliers. As transformações de log não demonstraram grandes alterações na distribuiçao dos dados, optou-se por usá-los, em sua maioria, sem transformações.  
+
+Algumas hipóteses iniciais foram levantadas como a possível influência do açúcar residual e do alcool na qualidade. os atributos relacionados aos ácidos (fixed.acidity, volatile.acidity, citric.acid) também pensamos ter influência e talvez os relacionados ao enxofre (free.sulfur.dioxide, total.sulfur.dioxide e sulfatos). A partir daí, uma tabela de correlação dos dados foi calculada e passamos a observar seus relacionamentos de destaque. 
+
+A influência dos atributos álcool (alcohol) e acidez volátil (volatile.acidity) sobre a qualidade ficou demonstrada. Sendo que o álcool apresentou uma correlação positiva e a acidez uma correlação negativa. Atributos como açúcar residual (residual.sugar) e acidez fixa (fixed.acidity) não apresentaram relação com a qualidade contrariando hipósteses iniciais. Os atributos relacionados ao enxofre (free.sulfur.dioxide, total.sulfur.dioxide, sulphates) não se destacaram no estudo e não sofreram maiores investigações. Talvez, seguindo uma outra linha de estudo, possam trazer outro tipo de conclusão. 
+
+A quantidade de dados disponíveis foi um fator limitante, não permitindo grandes generalizações sobre os vinhos tintos. Os dados se concentravam principalmente em vinhos medianos, dificultando conclusões sobre vinhos de qualidade superior e inferior. 
+
+Por fim, o modelo de regressão linear elaborado só conseguiu explicar cerca de 32% da qualidade dos vinhos.Muitas variáveis apresentavam distribuição assimétrica e até desconhecido, tornando a regressão mais limitada.  É possível que com o uso de outro tipo de modelo cheguemos a melhores conclusões. 
